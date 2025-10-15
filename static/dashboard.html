@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102,126,234,0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .files-section {
+            margin-top: 30px;
+        }
+        
+        .files-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .file-count {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .file-list {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            transition: background 0.2s;
+        }
+        
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        
+        .file-item:hover {
+            background: #f8f8f8;
+        }
+        
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .file-details {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .file-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .file-size {
+            color: #999;
+            font-size: 0.85em;
+        }
+        
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 14px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-download {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn-download:hover {
+            background: #45a049;
+        }
+        
+        .btn-delete {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn-delete:hover {
+            background: #da190b;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .status.show {
+            display: block;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .status.processing {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📁 <span id="tenantName">Loading...</span></h1>
+        <p class="subtitle">Document Dashboard</p>
+        
+        <div class="actions">
+            <button class="btn btn-primary" id="createRagBtn">
+                🤖 Create RAG Index
+            </button>
+            <button class="btn btn-secondary" id="refreshBtn">
+                🔄 Refresh Files
+            </button>
+            <button class="btn btn-secondary" id="uploadBtn">
+                📤 Upload New Files
+            </button>
+        </div>
+        
+        <div id="statusBox" class="status"></div>
+        
+        <div class="files-section">
+            <div class="files-header">
+                <h2>Your Documents</h2>
+                <span class="file-count" id="fileCount">Loading...</span>
+            </div>
+            <div id="fileList" class="file-list">
+                <div class="empty-state">
+                    <div class="loader"></div>
+                    <p>Loading files...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Get tenant name from URL path
+        const pathname = window.location.pathname;
+        const tenant = pathname.split('/').filter(p => p)[0];
+        
+        // Update page title
+        document.getElementById('tenantName').textContent = tenant;
+        document.title = `${tenant} - Dashboard`;
+        
+        function showStatus(message, type = 'info') {
+            const statusBox = document.getElementById('statusBox');
+            statusBox.textContent = message;
+            statusBox.className = `status show ${type}`;
+            setTimeout(() => statusBox.classList.remove('show'), 5000);
+        }
+        
+        async function loadFiles() {
+            try {
+                const response = await fetch(`/files/${tenant}`);
+                const data = await response.json();
+                
+                const fileList = document.getElementById('fileList');
+                const fileCount = document.getElementById('fileCount');
+                
+                fileCount.textContent = `${data.count} file(s)`;
+                
+                if (data.files.length === 0) {
+                    fileList.innerHTML = `
+                        <div class="empty-state">
+                            <p>📭 No files uploaded yet</p>
+                            <p style="font-size: 0.9em; margin-top: 10px;">Upload some documents to get started!</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                fileList.innerHTML = data.files.map(file => {
+                    const ext = file.filename.split('.').pop().toUpperCase().slice(0, 3);
+                    return `
+                        <div class="file-item">
+                            <div class="file-info">
+                                <div class="file-icon">${ext}</div>
+                                <div class="file-details">
+                                    <div class="file-name">${file.filename}</div>
+                                    <div class="file-size">${file.size_mb} MB</div>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <button class="btn-small btn-download" onclick="downloadFile('${file.filename}')">
+                                    ⬇️ Download
+                                </button>
+                                <button class="btn-small btn-delete" onclick="deleteFile('${file.filename}')">
+                                    🗑️ Delete
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                showStatus('Error loading files: ' + error.message, 'error');
+            }
+        }
+        
+        async function createRAG() {
+            const btn = document.getElementById('createRagBtn');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Creating RAG Index...';
+            
+            try {
+                const response = await fetch(`/rag/create/${tenant}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus(data.message, 'processing');
+                    checkRAGStatus();
+                } else {
+                    showStatus(data.detail || 'Failed to create RAG index', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '🤖 Create RAG Index';
+                }
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '🤖 Create RAG Index';
+            }
+        }
+        
+        async function checkRAGStatus() {
+            try {
+                const response = await fetch(`/rag/status/${tenant}`);
+                const data = await response.json();
+                
+                const btn = document.getElementById('createRagBtn');
+                
+                if (data.status === 'completed') {
+                    showStatus('✅ RAG index created successfully!', 'success');
+                    btn.disabled = false;
+                    btn.innerHTML = '🤖 Create RAG Index';
+                } else if (data.status === 'failed') {
+                    showStatus('❌ RAG creation failed: ' + (data.error || 'Unknown error'), 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '🤖 Create RAG Index';
+                } else if (data.status === 'processing') {
+                    setTimeout(checkRAGStatus, 2000);
+                }
+            } catch (error) {
+                console.error('Status check error:', error);
+                setTimeout(checkRAGStatus, 2000);
+            }
+        }
+        
+        async function downloadFile(filename) {
+            window.location.href = `/download/${tenant}/${filename}`;
+        }
+        
+        async function deleteFile(filename) {
+            if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
+            
+            try {
+                const response = await fetch(`/delete/${tenant}/${filename}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showStatus('File deleted successfully', 'success');
+                    loadFiles();
+                } else {
+                    showStatus('Failed to delete file', 'error');
+                }
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('createRagBtn').addEventListener('click', createRAG);
+        document.getElementById('refreshBtn').addEventListener('click', loadFiles);
+        document.getElementById('uploadBtn').addEventListener('click', () => {
+            window.location.href = '/';
+        });
+        
+        // Load files on page load
+        loadFiles();
+        
+        // Check if there's an ongoing RAG process on page load
+        (async () => {
+            try {
+                const response = await fetch(`/rag/status/${tenant}`);
+                const data = await response.json();
+                
+                if (data.status === 'processing') {
+                    const btn = document.getElementById('createRagBtn');
+                    btn.disabled = true;
+                    btn.innerHTML = '⏳ Creating RAG Index...';
+                    showStatus('RAG index creation in progress...', 'processing');
+                    checkRAGStatus();
+                }
+            } catch (error) {
+                console.error('Initial status check error:', error);
+            }
+        })();
+    </script>
+</body>
+</html>
