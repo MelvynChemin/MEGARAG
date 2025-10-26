@@ -16,7 +16,7 @@ dist/
 venv/
 env/
 ENV/
-
+.env
 # === IDEs ===
 .vscode/
 .idea/

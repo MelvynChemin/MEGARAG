@@ -15,7 +15,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 from dotenv import load_dotenv
-from fct import _rrf_fuse, _dedupe
+# from fct import _rrf_fuse, _dedupe
 load_dotenv()  # reads .env and adds vars to os.environ
 
 # Optional (cleaner: you can set these in your shell instead)

@@ -15,7 +15,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 from dotenv import load_dotenv
-from fct import _rrf_fuse, _dedupe
+# from fct import _rrf_fuse, _dedupe
 load_dotenv()  # reads .env and adds vars to os.environ
 
 # Optional (cleaner: you can set these in your shell instead)
@@ -37,7 +37,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.runnables import RunnablePassthrough
 from pathlib import Path
 import pickle
-def multi_query(name : str, question: str):
+def vanilla(name : str, question: str):
 
     
     template_rag = """Answer the following question 
@@ -61,6 +61,6 @@ def multi_query(name : str, question: str):
 
 
 if __name__ == "__main__":
-    mq_chain = multi_query("ai", "What is AI AGENTS?")
+    mq_chain = vanilla("ai", "What is AI AGENTS?")
     response = mq_chain.invoke({"question": "What is AI AGENTS?"})
     print(response)
