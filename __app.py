@@ -1,11 +1,10 @@
-# app.py - Complete FastAPI Backend with Chat Feature
+# app.py - Complete FastAPI Backend
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi import Path as ApiPath
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
 from pathlib import Path as FSPath
 from typing import List
@@ -26,7 +25,6 @@ app.add_middleware(
 BASE_DIR   = FSPath(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 UPLOAD_DIR = BASE_DIR / "uploads"
-CHROMA_DIR = BASE_DIR / "chroma-store"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -44,11 +42,6 @@ def normalize_tenant(raw: str) -> str:
     if not slug or not SAFE_SLUG.match(slug):
         raise HTTPException(status_code=400, detail="Invalid company name")
     return slug
-
-def tenant_has_rag_data(tenant_slug: str) -> bool:
-    """Check if the tenant has RAG data in chroma-store"""
-    tenant_chroma_dir = CHROMA_DIR / tenant_slug
-    return tenant_chroma_dir.exists() and tenant_chroma_dir.is_dir()
 
 def run_rag_pipeline(tenant_slug: str):
     """
@@ -95,11 +88,6 @@ def run_rag_pipeline(tenant_slug: str):
         }
 
 
-# --- Pydantic Models ---
-class ChatMessage(BaseModel):
-    message: str
-
-
 # --- Routes ---
 
 @app.get("/")
@@ -113,20 +101,6 @@ async def tenant_dashboard(tenant: str = ApiPath(..., description="Company name"
     """Serve tenant-specific dashboard"""
     normalize_tenant(tenant)  # Validate tenant name
     return FileResponse(STATIC_DIR / "dashboard.html")
-
-
-@app.get("/{tenant}/chat")
-async def tenant_chat(tenant: str = ApiPath(..., description="Company name")):
-    """Serve chat interface for tenant (only if RAG data exists)"""
-    tenant_slug = normalize_tenant(tenant)
-    
-    if not tenant_has_rag_data(tenant_slug):
-        raise HTTPException(
-            status_code=404,
-            detail=f"No RAG data found for '{tenant_slug}'. Please create RAG index first."
-        )
-    
-    return FileResponse(STATIC_DIR / "chat.html")
 
 
 @app.post("/upload/{tenant}")
@@ -292,109 +266,6 @@ async def get_rag_status(tenant: str = ApiPath(..., description="Company name"))
         })
     
     return JSONResponse(rag_status[tenant_slug])
-
-
-@app.get("/chat/check/{tenant}")
-async def check_chat_availability(tenant: str = ApiPath(..., description="Company name")):
-    """Check if chat is available for tenant"""
-    tenant_slug = normalize_tenant(tenant)
-    has_rag = tenant_has_rag_data(tenant_slug)
-    
-    return JSONResponse({
-        "tenant": tenant_slug,
-        "chat_available": has_rag,
-        "message": "Chat is available" if has_rag else "Please create RAG index first"
-    })
-
-
-@app.post("/chat/{tenant}")
-async def chat_with_rag(
-    tenant: str = ApiPath(..., description="Company name"),
-    chat_message: ChatMessage = None
-):
-    """Send a message and get RAG response"""
-    tenant_slug = normalize_tenant(tenant)
-    
-    if not tenant_has_rag_data(tenant_slug):
-        raise HTTPException(
-            status_code=404,
-            detail="No RAG data found. Please create RAG index first."
-        )
-    
-    try:
-        # Import the query function from test.py
-        from query_classifier import classify
-        from agents.vanilla import vanilla
-        from agents.subq import subq
-        from agents.multi_query import multi_query
-        from agents.step_back import step_back
-        
-        input_text = chat_message.message
-        
-        # Classify the query
-        classify_query = classify([input_text])
-        label = classify_query[0]['label']
-        
-        if label == 'unsafe':
-            return JSONResponse({
-                "response": "This query has been classified as unsafe. Please try rephrasing it.",
-                "classification": label
-            })
-        
-        elif label == 'external_knowledge':
-            chain = vanilla(tenant_slug, input_text)
-            response = chain.invoke({"question": input_text})
-            return JSONResponse({
-                "response": response,
-                "classification": label
-            })
-        
-        elif label == 'internal_knowledge':
-            ambiguity = classify_query[0]['ambiguity_score']
-            
-            if ambiguity > 0.7:
-                chain = step_back(tenant_slug, input_text)
-                response = chain.invoke({"question": input_text})
-                return JSONResponse({
-                    "response": response,
-                    "classification": label,
-                    "ambiguity_score": ambiguity,
-                    "method": "step_back"
-                })
-            elif ambiguity > 0.4:
-                chain = subq(tenant_slug, input_text)
-                response = chain.invoke({"question": input_text})
-                return JSONResponse({
-                    "response": response,
-                    "classification": label,
-                    "ambiguity_score": ambiguity,
-                    "method": "sub_question"
-                })
-            else:
-                chain = multi_query(tenant_slug, input_text)
-                response = chain.invoke({"question": input_text})
-                return JSONResponse({
-                    "response": response,
-                    "classification": label,
-                    "ambiguity_score": ambiguity,
-                    "method": "multi_query"
-                })
-        else:
-            # return JSONResponse({
-            #     "response": "Unable to classify the query.",
-            #     "classification": "unknown"
-            # })
-            chain = multi_query(tenant_slug, input_text)
-            response = chain.invoke({"question": input_text})
-            return JSONResponse({
-                "response": response
-            })
-            
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing query: {str(e)}"
-        )
 
 
 if __name__ == "__main__":

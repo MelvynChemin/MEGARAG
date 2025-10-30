@@ -36,8 +36,12 @@ def query(company, input_text):
             print("Multi-query RAG response:", response)
             return response
     else:
-        print("Unable to classify the query.")
-        return "Unable to classify the query."
+        # print("Unable to classify the query.")
+        # return "Unable to classify the query."
+        chain = multi_query(company, input_text)
+        response = chain.invoke({"question": input_text})
+        print("Multi-query RAG response:", response)
+        return response
     
 if __name__ == "__main__":
     query("ai", "Explain RAG fusion.")

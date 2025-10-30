@@ -43,6 +43,7 @@ def perform_ocr(pdf_path: Path):
     clean_chunks, all_pages = ingest_pdf_folder(uploads, tenant="acme_inc", acl="internal")
     return clean_chunks, all_pages
 
+
 def save_vector_db(clean_chunks: List[Document]) -> None:
     """
     Saves the clean chunks into a Chroma vector database.

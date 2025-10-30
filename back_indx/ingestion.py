@@ -1,3 +1,4 @@
+from enum import unique
 import os, re, unicodedata, html, hashlib, datetime
 from pathlib import Path
 from typing import List, Dict, Tuple, Set
@@ -61,10 +62,16 @@ def normalize_text(t: str) -> str:
     t = re.sub(r"\n{3,}", "\n\n", t)
     return t.strip()
 
-def learn_boilerplate_lines(pages: List[str], top_k: int = 3, bottom_k: int = 3, freq_threshold: float = 0.5) -> Set[str]:
+def learn_boilerplate_lines(pages: List[str], top_k: int = 3, bottom_k: int = 3, freq_threshold: float = 0.8) -> Set[str]:
     """
+    LESS AGGRESSIVE: Changed freq_threshold from 0.5 to 0.8
     Heuristic: grab top/bottom K lines of each page; if a line repeats in >= freq_threshold of pages, treat as boilerplate
     """
+    # For single-page documents, don't remove any boilerplate
+    if len(pages) <= 1:
+        print("   ℹ️  Single page document - skipping boilerplate removal")
+        return set()
+    
     counter = Counter()
     total = len(pages)
     for p in pages:
@@ -76,8 +83,13 @@ def learn_boilerplate_lines(pages: List[str], top_k: int = 3, bottom_k: int = 3,
         for ln in (heads + tails):
             if len(ln) <= 120:  # avoid counting long paragraphs
                 counter[ln] += 1
-    return {ln for ln, c in counter.items() if c / max(1, total) >= freq_threshold}
-
+    
+    boilerplate = {ln for ln, c in counter.items() if c / max(1, total) >= freq_threshold}
+    
+    if boilerplate:
+        print(f"   ℹ️  Found {len(boilerplate)} boilerplate lines to remove")
+    
+    return boilerplate
 def strip_boilerplate(text: str, boilerplate: Set[str]) -> str:
     if not boilerplate:
         return text
@@ -96,8 +108,8 @@ PHONE_RE = re.compile(r"\b(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}
 APIKEY_RE = re.compile(r"\b(sk-[A-Za-z0-9]{20,})\b", re.I)
 
 def redact_pii(text: str) -> str:
-    text = EMAIL_RE.sub("[REDACTED_EMAIL]", text)
-    text = PHONE_RE.sub("[REDACTED_PHONE]", text)
+    # text = EMAIL_RE.sub("[REDACTED_EMAIL]", text)
+    # text = PHONE_RE.sub("[REDACTED_PHONE]", text)
     text = APIKEY_RE.sub("[REDACTED_KEY]", text)
     return text
 
@@ -145,6 +157,9 @@ class Deduper:
 # 5) PDF → clean page Documents (with metadata)
 # -------------------------
 def load_and_clean_pdf(pdf_path: Path, tenant: str = "default", acl: str = "internal") -> List[Document]:
+    """
+    Updated with better debugging
+    """
     base_meta = parse_filename_metadata(pdf_path)
     base_meta.update({"tenant": tenant, "acl": acl})
 
@@ -154,13 +169,27 @@ def load_and_clean_pdf(pdf_path: Path, tenant: str = "default", acl: str = "inte
 
     # Learn boilerplate lines across pages
     pages_text = [d.page_content or "" for d in raw_docs]
+    
+    # DEBUG: Show raw content
+    print(f"   📄 Raw page content ({len(pages_text)} pages):")
+    for i, page in enumerate(pages_text):
+        print(f"      Page {i+1}: {len(page)} chars")
+    
     boiler = learn_boilerplate_lines(pages_text)
 
     cleaned_docs = []
     for d in raw_docs:
-        text = normalize_text(d.page_content or "")
+        text_original = d.page_content or ""
+        
+        # Step by step cleaning with debug output
+        text = normalize_text(text_original)
+        print(f"   After normalize: {len(text)} chars")
+        
         text = strip_boilerplate(text, boiler)
+        print(f"   After boilerplate removal: {len(text)} chars")
+        
         text = redact_pii(text)
+        print(f"   After PII redaction: {len(text)} chars")
 
         page_meta = dict(base_meta)
         page_meta.update({
@@ -171,6 +200,7 @@ def load_and_clean_pdf(pdf_path: Path, tenant: str = "default", acl: str = "inte
         })
 
         cleaned_docs.append(Document(page_content=text, metadata=page_meta))
+    
     return cleaned_docs
 
 # -------------------------
@@ -288,10 +318,157 @@ def ingest_pdf_folder(folder: Path, tenant: str = "default", acl: str = "interna
     chunks = semantic_then_window(all_pages)
 
     # Dedupe
-    deduper = Deduper(near_thresh=0.90)
+    deduper = Deduper(near_thresh=0.98)
     unique: List[Document] = []
     for d in chunks:
         if not deduper.is_duplicate(d.page_content):
             unique.append(d)
 
+    # SAFETY CHECK: If deduplication removes everything, return original chunks
+    if len(unique) == 0 and len(chunks) > 0:
+        print("⚠️  WARNING: Deduplication removed all chunks! Returning original chunks.")
+        return chunks, all_pages
+
+    
     return unique, all_pages
+
+# def ingest_pdf_folder_debug(folder: Path, tenant: str = "default", acl: str = "internal") -> tuple:
+#     """
+#     Debug version with verbose output to identify where chunks are lost
+#     """
+#     print(f"\n{'='*70}")
+#     print(f"🔍 DEBUG: Starting PDF ingestion for folder: {folder}")
+#     print(f"{'='*70}")
+    
+#     all_pages = []
+#     pdf_files = list(folder.glob("*.pdf"))
+    
+#     print(f"📂 Found {len(pdf_files)} PDF file(s)")
+    
+#     for pdf in sorted(pdf_files):
+#         print(f"\n📄 Processing: {pdf.name}")
+#         print("-" * 70)
+        
+#         try:
+#             # from back_indx.ingestion import load_and_clean_pdf
+#             pages = load_and_clean_pdf(pdf, tenant=tenant, acl=acl)
+            
+#             print(f"   ✅ Loaded {len(pages)} pages")
+            
+#             # Show content stats
+#             total_chars = sum(len(p.page_content) for p in pages)
+#             print(f"   📊 Total characters: {total_chars}")
+            
+#             if pages:
+#                 first_page_chars = len(pages[0].page_content)
+#                 print(f"   📄 First page: {first_page_chars} chars")
+#                 if first_page_chars > 0:
+#                     print(f"   📝 Preview: {pages[0].page_content[:150]}...")
+            
+#             all_pages.extend(pages)
+            
+#         except Exception as e:
+#             print(f"   ❌ Error processing {pdf.name}: {e}")
+#             import traceback
+#             traceback.print_exc()
+    
+#     print(f"\n{'='*70}")
+#     print(f"📊 Total pages before chunking: {len(all_pages)}")
+#     print(f"{'='*70}")
+    
+#     if not all_pages:
+#         print("❌ No pages loaded from any PDF!")
+#         return [], []
+    
+#     # Check total content
+#     total_content = sum(len(p.page_content) for p in all_pages)
+#     print(f"📏 Total content: {total_content} characters")
+    
+#     # Chunk
+#     print(f"\n{'='*70}")
+#     print(f"✂️  Starting chunking process...")
+#     print(f"{'='*70}")
+    
+#     try:
+#         # from back_indx.ingestion import semantic_then_window
+#         chunks = semantic_then_window(all_pages)
+#         print(f"✅ Created {len(chunks)} chunks")
+        
+#         if chunks:
+#             avg_chunk_size = sum(len(c.page_content) for c in chunks) / len(chunks)
+#             print(f"📊 Average chunk size: {avg_chunk_size:.0f} chars")
+#             print(f"📝 First chunk preview: {chunks[0].page_content[:150]}...")
+        
+#     except Exception as e:
+#         print(f"❌ Chunking failed: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return [], all_pages
+    
+#     # Dedupe
+#     print(f"\n{'='*70}")
+#     print(f"🔄 Starting deduplication (near_thresh=0.90)...")
+#     print(f"{'='*70}")
+    
+#     try:
+#         # from back_indx.ingestion import Deduper
+        
+#         # LOWER THE THRESHOLD FOR TESTING
+#         deduper = Deduper(near_thresh=0.95)  # Increased from 0.90
+#         unique = []
+#         duplicates_count = 0
+        
+#         for i, d in enumerate(chunks):
+#             is_dup = deduper.is_duplicate(d.page_content)
+#             if not is_dup:
+#                 unique.append(d)
+#             else:
+#                 duplicates_count += 1
+#                 if duplicates_count <= 3:  # Show first few duplicates
+#                     print(f"   ⚠️  Chunk {i} marked as duplicate: {d.page_content[:100]}...")
+        
+#         print(f"✅ Deduplication complete:")
+#         print(f"   - Original chunks: {len(chunks)}")
+#         print(f"   - Duplicates removed: {duplicates_count}")
+#         print(f"   - Unique chunks: {len(unique)}")
+        
+#         if duplicates_count == len(chunks):
+#             print(f"\n❌ ALL CHUNKS MARKED AS DUPLICATES!")
+#             print(f"   This is the problem. The deduplication is too aggressive.")
+#             print(f"   Possible causes:")
+#             print(f"   1. Document has very repetitive content")
+#             print(f"   2. near_thresh=0.90 is too low")
+#             print(f"   3. Short document causing false positives")
+        
+#         return unique, all_pages
+        
+#     except Exception as e:
+#         print(f"❌ Deduplication failed: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return chunks, all_pages
+
+
+# # Test function
+# if __name__ == "__main__":
+#     from pathlib import Path
+#     import sys
+    
+#     if len(sys.argv) < 2:
+#         folder = Path("uploads/hairstylist")
+#     else:
+#         folder = Path(sys.argv[1])
+    
+#     print(f"Testing ingestion with: {folder}")
+#     chunks, pages = ingest_pdf_folder_debug(folder, tenant="hairstylist", acl="internal")
+    
+#     print(f"\n{'='*70}")
+#     print(f"FINAL RESULTS:")
+#     print(f"{'='*70}")
+#     print(f"Pages: {len(pages)}")
+#     print(f"Chunks: {len(chunks)}")
+    
+#     if chunks:
+#         print(f"\n✅ SUCCESS! {len(chunks)} chunks ready for embedding")
+#     else:
+#         print(f"\n❌ FAILED: No chunks produced")
